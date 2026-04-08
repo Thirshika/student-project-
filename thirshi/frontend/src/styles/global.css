@@ -1,0 +1,145 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Sans+3:wght@400;600;700;800;900&display=swap');
+@import './variables.css';
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.75;
+  overflow-x: hidden;
+}
+h1,h2,h3,.font-display { font-family: 'Source Sans 3', sans-serif; }
+img { max-width: 100%; height: auto; display: block; }
+a { text-decoration: none; color: inherit; }
+button { cursor: pointer; font-family: inherit; }
+
+/* ── Buttons ── */
+.btn-primary {
+  background: var(--grad); color: #fff; border: none;
+  padding: 10px 22px; border-radius: 12px;
+  font-size: .9rem; font-weight: 700;
+  transition: all .2s; box-shadow: 0 4px 16px rgba(15,23,42,.35);
+  white-space: nowrap;
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(15,23,42,.42); }
+
+.btn-secondary {
+  background: #fff; color: var(--ink); border: 2px solid var(--border);
+  padding: 8px 20px; border-radius: 12px;
+  font-size: .9rem; font-weight: 600; transition: all .2s;
+  white-space: nowrap;
+}
+.btn-secondary:hover { border-color: var(--ink); transform: translateY(-1px); }
+
+.btn-dark {
+  background: #0f172a; color: #fff; border: none;
+  padding: 9px 20px; border-radius: var(--radius-sm);
+  font-size: .88rem; font-weight: 700; transition: all .18s;
+  box-shadow: 0 3px 12px rgba(15,23,42,.25);
+  white-space: nowrap;
+}
+.btn-dark:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(15,23,42,.3); }
+
+.btn-gradient {
+  background: linear-gradient(135deg, #0ea5e9, #0f766e); color: #fff; border: none;
+  padding: 9px 20px; border-radius: 12px; font-weight: 700; font-size: .88rem;
+  transition: all .2s; box-shadow: 0 4px 14px rgba(14,165,233,.3);
+  white-space: nowrap;
+}
+.btn-gradient:hover { transform: translateY(-2px); }
+
+/* ── Toast overrides ── */
+.toast-custom { font-family: 'Inter', sans-serif; font-weight: 600; }
+
+/* ── Badge/Tag ── */
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+  padding: 5px 14px; border-radius: var(--radius-full);
+}
+.badge-violet { background: rgba(124,58,237,.1); border: 1px solid rgba(124,58,237,.2); color: var(--violet); }
+.badge-teal { background: rgba(6,182,212,.09); border: 1px solid rgba(6,182,212,.2); color: var(--teal); }
+.badge-coral { background: rgba(59,130,246,.12); border: 1px solid rgba(59,130,246,.2); color: var(--secondary); }
+
+/* ── Section ── */
+.section { padding: 72px 32px; }
+.section-inner { max-width: 1180px; margin: 0 auto; }
+.sec-title {
+  font-size: clamp(1.8rem, 3vw, 2.7rem); font-weight: 800;
+  color: var(--ink); letter-spacing: -1.2px; line-height: 1.12; margin-bottom: 14px;
+}
+
+/* ── Card ── */
+.card {
+  background: #fff; border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+  transition: all .22s; box-shadow: var(--sh-xs);
+}
+.card:hover { transform: translateY(-4px); box-shadow: var(--sh); }
+
+/* ── Overlay / Modal ── */
+.overlay {
+  position: fixed; inset: 0; z-index: 400;
+  background: rgba(12,10,30,.5); backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.modal {
+  background: var(--white); border-radius: 24px;
+  max-width: 480px; width: 100%; box-shadow: var(--sh-lg);
+  animation: scaleIn .24s ease; overflow: hidden;
+}
+@keyframes scaleIn { from { transform: scale(.94) translateY(18px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+@keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+
+/* ── Form ── */
+.form-field { display: flex; flex-direction: column; gap: 5px; }
+.form-field label { font-size: .74rem; font-weight: 700; color: var(--ink2); }
+.form-field label .req { color: var(--coral); margin-left: 2px; }
+.form-field input, .form-field textarea, .form-field select {
+  padding: 11px 16px; border: 2px solid var(--border); border-radius: 14px;
+  font-family: 'Inter', sans-serif; font-size: .86rem; color: var(--ink);
+  background: var(--white); outline: none; transition: all .15s;
+}
+.form-field input:focus, .form-field textarea:focus, .form-field select:focus {
+  border-color: var(--secondary); box-shadow: 0 0 0 3px rgba(14,165,233,.1);
+}
+.form-field input::placeholder, .form-field textarea::placeholder { color: var(--faint); }
+.form-field textarea { resize: vertical; min-height: 92px; line-height: 1.6; }
+.form-error { font-size: .7rem; color: #dc2626; margin-top: 2px; }
+
+/* ── Avatar colors ── */
+.av1{background:linear-gradient(135deg,#ff5c5c,#ff8e8e);}
+.av2{background:linear-gradient(135deg,#06b6d4,#3b82f6);}
+.av3{background:linear-gradient(135deg,#f59e0b,#ff5c5c);}
+.av4{background:linear-gradient(135deg,#7c3aed,#c026d3);}
+.av5{background:linear-gradient(135deg,#3b82f6,#7c3aed);}
+.av6{background:linear-gradient(135deg,#22c55e,#06b6d4);}
+.av7{background:linear-gradient(135deg,#9333ea,#4f46e5);}
+.av8{background:linear-gradient(135deg,#f59e0b,#fbbf24);}
+.av9{background:linear-gradient(135deg,#f43f5e,#ff5c5c);}
+.av10{background:linear-gradient(135deg,#3b82f6,#1d4ed8);}
+.av11{background:linear-gradient(135deg,#22c55e,#06b6d4);}
+.av12{background:linear-gradient(135deg,#7c3aed,#f43f5e);}
+
+/* ── Domain pills ── */
+.dom-ai{background:rgba(124,58,237,.85);color:#fff;}
+.dom-web{background:rgba(59,130,246,.85);color:#fff;}
+.dom-mobile{background:rgba(255,92,92,.85);color:#fff;}
+.dom-iot{background:rgba(6,182,212,.85);color:#fff;}
+.dom-data{background:rgba(245,158,11,.9);color:var(--ink);}
+.dom-other{background:rgba(100,116,139,.85);color:#fff;}
+
+/* ── Responsive ── */
+@media(max-width:1024px) {
+  .hide-tablet { display: none !important; }
+}
+@media(max-width:768px) {
+  .hide-mobile { display: none !important; }
+  .section { padding: 48px 20px; }
+}
+@media(max-width:480px) {
+  .stack-mobile { flex-direction: column !important; }
+}

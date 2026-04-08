@@ -1,0 +1,27 @@
+:root {
+  --primary: #1a2b65;
+  --secondary: #0ea5e9;
+  --violet: #0f172a;
+  --teal: #0f766e;
+  --coral: #1e40af;
+  --ink: #0c0a1e;
+  --ink2: #1e1b4b;
+  --muted: #6b7280;
+  --faint: #a5b4fc;
+  --white: #ffffff;
+  --off: #f8fafc;
+  --bg: #f1f5f9;
+  --bg2: #e2e8f0;
+  --card: #ffffff;
+  --border: #cbd5e1;
+  --grad: linear-gradient(135deg, var(--primary), var(--secondary));
+  --grad2: linear-gradient(135deg, var(--teal), var(--secondary));
+  --sh-xs: 0 1px 4px rgba(30,64,175,.08);
+  --sh-sm: 0 2px 12px rgba(30,64,175,.12);
+  --sh: 0 6px 30px rgba(30,64,175,.14);
+  --sh-lg: 0 20px 60px rgba(30,64,175,.2);
+  --radius: 16px;
+  --radius-sm: 10px;
+  --radius-lg: 24px;
+  --radius-full: 9999px;
+}
