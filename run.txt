@@ -1,0 +1,9 @@
+cd "thirshi/backend"
+# Activate the virtual environment
+.\.venv\Scripts\activate
+# Run the server
+python run.py
+
+
+cd "thirshi/frontend"
+ npm run vite-dev
