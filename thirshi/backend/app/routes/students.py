@@ -240,3 +240,4 @@ def update_student_profile(data: StudentUpdate, db: sqlite3.Connection = Depends
     ))
     db.commit()
     return {"message": "Profile updated successfully"}
+
