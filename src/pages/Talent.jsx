@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { fetchStudents, addToShortlist, updatePipelineStage } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { MdVerified } from 'react-icons/md';
+import { useNavigate } from 'react-router-dom';
 
 const DOMAINS = {
   ai: { l: 'Artificial Intelligence', c: 'dom-ai' },
@@ -16,6 +17,7 @@ const DOMAINS = {
 };
 
 export default function Talent() {
+  const navigate = useNavigate();
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -291,7 +293,7 @@ export default function Talent() {
                   <div style={{ textAlign: 'center', padding: '10px 0' }}>
                     <div style={{ fontSize: '2rem', marginBottom: 10 }}>🔒</div>
                     <p style={{ fontSize: '.85rem', color: 'var(--muted)', marginBottom: 16 }}>Contact details, resumes, and project links are hidden to protect student privacy.</p>
-                    <button className="btn-gradient" style={{ width: '100%' }} onClick={() => document.querySelector('header button.btn-secondary:nth-child(2)').click()}>Login as HR to View</button>
+                    <button className="btn-gradient" style={{ width: '100%' }} onClick={() => navigate('/login-hr')}>Login as HR to View</button>
                   </div>
                 )}
               </div>

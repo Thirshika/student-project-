@@ -1,8 +1,31 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { FiBriefcase, FiUpload } from 'react-icons/fi';
 import { motion } from 'framer-motion';
+import { fetchStudents } from '../services/api';
 
 export default function Home() {
+  const [stats, setStats] = useState([
+    { n: '500+', l: 'Students' },
+    { n: '6', l: 'Domains' },
+    { n: '40+', l: 'Years TATTI' },
+    { n: '2', l: 'Colleges' }
+  ]);
+
+  useEffect(() => {
+    fetchStudents().then(res => {
+      const students = res.data.students || [];
+      if (students.length > 0) {
+        setStats([
+          { n: students.length.toString(), l: 'Students' },
+          { n: new Set(students.map(s => s.domain).filter(Boolean)).size.toString(), l: 'Domains' },
+          { n: '40+', l: 'Years TATTI' },
+          { n: new Set(students.map(s => s.college).filter(Boolean)).size.toString(), l: 'Colleges' }
+        ]);
+      }
+    }).catch(console.error);
+  }, []);
+
   return (
     <div className="page active">
       <section style={{ background: '#fff', padding: '80px 32px 74px', position: 'relative', overflow: 'hidden', borderBottom: '1px solid var(--border)' }}>
@@ -24,12 +47,7 @@ export default function Home() {
               <Link to="/challenges" className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>🏆 Skill Challenges</Link>
             </div>
             <div style={{ display: 'flex', gap: 32, marginTop: 48, flexWrap: 'wrap' }}>
-              {[
-                { n: '500+', l: 'Students' },
-                { n: '6', l: 'Domains' },
-                { n: '40+', l: 'Years TATTI' },
-                { n: '2', l: 'Colleges' }
-              ].map((s, i) => (
+              {stats.map((s, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                   <div>
                     <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--ink)', lineHeight: 1 }}>{s.n}</div>

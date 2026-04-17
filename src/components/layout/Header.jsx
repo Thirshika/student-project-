@@ -73,7 +73,7 @@ export default function Header() {
                 {studentRole === 'student' ? (
                    <div style={{ fontSize: '.85rem', fontWeight: 600, color: 'var(--ink)', background: 'var(--bg)', padding: '8px 16px', borderRadius: 20 }}>Student Profile</div>
                 ) : (
-                  <button className="btn-nav btn-nav-primary" style={{ background: 'var(--secondary)' }} onClick={() => navigate('/portal')}>
+                  <button className="btn-nav btn-nav-primary" onClick={() => navigate('/portal')}>
                     <FiBriefcase /> Job Finder
                   </button>
                 )}
@@ -89,7 +89,7 @@ export default function Header() {
                 <button className="btn-nav btn-nav-primary" onClick={() => setShowHRLogin(true)}>
                   <FiBriefcase /> HR / Recruiter
                 </button>
-                <button className="btn-nav btn-nav-primary" style={{ background: 'var(--secondary)' }} onClick={() => { setLoginMode('seeker'); setShowLogin(true); }}>
+                <button className="btn-nav btn-nav-primary" onClick={() => { setLoginMode('seeker'); setShowLogin(true); }}>
                    Job Seeker
                 </button>
                 <button className="btn-nav btn-nav-primary" onClick={() => { setLoginMode('student'); setShowLogin(true); }}>
@@ -131,14 +131,14 @@ export default function Header() {
                   {studentRole === 'student' ? (
                     <div style={{ padding: '12px 16px', fontWeight: 700, color: 'var(--muted)' }}>Student Profile</div>
                   ) : (
-                    <button className="btn-nav btn-nav-primary" style={{ background: 'var(--secondary)', width: '100%', justifyContent: 'center' }} onClick={() => { navigate('/portal'); setMobOpen(false) }}>Job Seeker Dashboard</button>
+                    <button className="btn-nav btn-nav-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => { navigate('/portal'); setMobOpen(false) }}>Job Seeker Dashboard</button>
                   )}
                 </>
               ) : (
                 <>
                   <button className="btn-nav btn-nav-primary" onClick={()=>{setShowAdminLogin(true);setMobOpen(false)}} style={{width: '100%', justifyContent: 'center'}}>Admin Portal</button>
                   <button className="btn-nav btn-nav-primary" onClick={()=>{setShowHRLogin(true);setMobOpen(false)}} style={{width: '100%', justifyContent: 'center'}}>HR / Recruiter</button>
-                  <button className="btn-nav btn-nav-primary" style={{ background: 'var(--secondary)', width: '100%', justifyContent: 'center' }} onClick={() => { setLoginMode('seeker'); setShowLogin(true); setMobOpen(false); }}>Job Seeker</button>
+                  <button className="btn-nav btn-nav-primary" onClick={() => { setLoginMode('seeker'); setShowLogin(true); setMobOpen(false); }} style={{ width: '100%', justifyContent: 'center' }}>Job Seeker</button>
                   <button className="btn-nav btn-nav-primary" onClick={() => { setLoginMode('student'); setShowLogin(true); setMobOpen(false); }} style={{ width: '100%', justifyContent: 'center' }}>Student Login</button>
                 </>
               )}

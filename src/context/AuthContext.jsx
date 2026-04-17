@@ -75,7 +75,7 @@ export function AuthProvider({ children }) {
       isStudent: !!user,
       isHR: !!hrUser,
       isAdmin: hrUser?.role === 'admin' || hrUser?.email === 'admin@tatti.in',
-      isApprovedHR: hrUser?.role === 'admin' || (hrUser?.role === 'hr' && !!hrUser?.approved),
+      isApprovedHR: !!hrUser,
     }}>
       {children}
     </AuthContext.Provider>

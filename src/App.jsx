@@ -10,6 +10,7 @@ import Admin from './pages/Admin';
 import Challenges from './pages/Challenges';
 
 import StudentDashboard from './pages/StudentDashboard';
+import HRLogin from './pages/HRLogin';
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
           <Route path="/upload" element={<Upload />} />
           <Route path="/about" element={<About />} />
           <Route path="/hr-dashboard" element={<Dashboard />} />
+          <Route path="/login-hr" element={<HRLogin />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/challenges" element={<Challenges />} />
           <Route path="/portal" element={<StudentDashboard />} />
