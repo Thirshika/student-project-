@@ -19,9 +19,9 @@ export function AuthProvider({ children }) {
           const res = await verifyToken(sToken);
           setUser({ ...res.data, token: sToken });
           setStudentRole(sRole || 'student');
-        } catch { 
-           sessionStorage.removeItem('ta_token'); 
-           sessionStorage.removeItem('ta_role');
+        } catch {
+          sessionStorage.removeItem('ta_token');
+          sessionStorage.removeItem('ta_role');
         }
       }
       // Restore HR session
@@ -75,7 +75,7 @@ export function AuthProvider({ children }) {
       isStudent: !!user,
       isHR: !!hrUser,
       isAdmin: hrUser?.role === 'admin' || hrUser?.email === 'admin@tatti.in',
-      isApprovedHR: !!hrUser,
+      isApprovedHR: !!hrUser?.approved || hrUser?.role === 'admin' || hrUser?.email === 'admin@tatti.in',
     }}>
       {children}
     </AuthContext.Provider>

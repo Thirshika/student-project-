@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
   fetchChallenges, 
@@ -11,6 +12,7 @@ import { FiPlus, FiUploadCloud, FiCheckCircle, FiXCircle } from 'react-icons/fi'
 
 export default function Challenges() {
   const { isStudent, isHR, isAdmin, user, hrUser } = useAuth();
+  const location = useLocation();
   const [challenges, setChallenges] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -28,6 +30,7 @@ export default function Challenges() {
 
   useEffect(() => {
     loadChallenges();
+    if (location.state?.challenge) setActiveChallenge(location.state.challenge);
   }, []);
 
   const loadChallenges = async () => {

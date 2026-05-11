@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { FiMenu, FiX, FiLock, FiBriefcase, FiUser, FiLogOut } from 'react-icons/fi';
+import { FiMenu, FiX, FiLock, FiBriefcase, FiLogOut } from 'react-icons/fi';
 import LoginModal from '../auth/LoginModal';
 import HRLoginModal from '../auth/HRLoginModal';
 import AdminLoginModal from '../auth/AdminLoginModal';
@@ -70,11 +70,13 @@ export default function Header() {
               </div>
             ) : isStudent ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                {studentRole === 'student' ? (
-                   <div style={{ fontSize: '.85rem', fontWeight: 600, color: 'var(--ink)', background: 'var(--bg)', padding: '8px 16px', borderRadius: 20 }}>Student Profile</div>
-                ) : (
+                {studentRole === 'seeker' ? (
                   <button className="btn-nav btn-nav-primary" onClick={() => navigate('/portal')}>
-                    <FiBriefcase /> Job Finder
+                    Job Seeker Portal
+                  </button>
+                ) : (
+                  <button className="btn-nav btn-nav-primary" onClick={() => navigate('/upload')}>
+                    Upload Project
                   </button>
                 )}
                 <button className="btn-nav btn-nav-outline" onClick={() => { logoutStudent(); navigate('/'); }}>
@@ -128,10 +130,10 @@ export default function Header() {
                 <button className="btn-nav btn-nav-primary" onClick={() => { navigate('/hr-dashboard'); setMobOpen(false) }} style={{ width: '100%', justifyContent: 'center' }}>HR Dashboard</button>
               ) : isStudent ? (
                 <>
-                  {studentRole === 'student' ? (
-                    <div style={{ padding: '12px 16px', fontWeight: 700, color: 'var(--muted)' }}>Student Profile</div>
+                  {studentRole === 'seeker' ? (
+                    <button className="btn-nav btn-nav-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => { navigate('/portal'); setMobOpen(false) }}>Job Seeker Portal</button>
                   ) : (
-                    <button className="btn-nav btn-nav-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => { navigate('/portal'); setMobOpen(false) }}>Job Seeker Dashboard</button>
+                    <button className="btn-nav btn-nav-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => { navigate('/upload'); setMobOpen(false) }}>Upload Project</button>
                   )}
                 </>
               ) : (

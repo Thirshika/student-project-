@@ -3,42 +3,45 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
-  fetchJobs, applyToJob, fetchMyApplications, toggleBookmark, fetchBookmarks,
-  fetchChallenges, fetchStudent, submitProject, updateStudentProfile, uploadResume
+  fetchJobs, fetchMyApplications, fetchBookmarks, toggleBookmark,
+  fetchChallenges, fetchNotifications, fetchMyProfile, updateStudentProfile, uploadResume, applyToJob
 } from '../services/api';
 import {
   FiHome, FiUser, FiBriefcase, FiSend, FiStar, FiTriangle,
   FiBell, FiCheckCircle, FiClock, FiXCircle, FiTrendingUp,
-  FiMapPin, FiDollarSign, FiClock as FiTime, FiDownload, FiGlobe, FiGithub, FiLinkedin, FiEdit2, FiMessageSquare, FiInfo, FiLayers, FiFileText
+  FiMapPin, FiDollarSign, FiDownload, FiGlobe, FiGithub, FiLinkedin, FiEdit2, FiMessageSquare, FiInfo, FiFileText, FiX, FiLogOut
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
 export default function StudentDashboard() {
-  const { user, isStudent } = useAuth();
+  const { user, isStudent, logoutStudent } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
+  
+  // Data State
   const [jobs, setJobs] = useState([]);
   const [applications, setApplications] = useState([]);
   const [bookmarks, setBookmarks] = useState([]);
   const [profile, setProfile] = useState(null);
   const [challenges, setChallenges] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  
+  // UI State
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-
-  // Modals
-  const [applyingJob, setApplyingJob] = useState(null);
   const [showApplyModal, setShowApplyModal] = useState(false);
-  const [applyForm, setApplyForm] = useState({ coverLetter: '', resumeUpdate: null });
+  const [applyingJob, setApplyingJob] = useState(null);
+  const [applyForm, setApplyForm] = useState({ coverLetter: '' });
+  const [showChallengeModal, setShowChallengeModal] = useState(false);
+  const [selectedChallenge, setSelectedChallenge] = useState(null);
 
-  // Stats
   const stats = {
     applied: applications.length,
-    shortlisted: applications.filter(a => a.status === 'shortlisted').length,
-    pending: applications.filter(a => a.status === 'applied' || a.status === 'review').length
+    shortlisted: applications.filter(a => ['shortlisted', 'selected', 'interview'].includes(a.status)).length,
+    pending: applications.filter(a => ['applied', 'review'].includes(a.status)).length
   };
 
-  // Profile Completeness
   const getCompleteness = () => {
     if (!profile) return 0;
     let score = 0;
@@ -52,24 +55,27 @@ export default function StudentDashboard() {
   };
 
   const loadData = async () => {
-    if (!isStudent) return;
+    if (!isStudent || !user?.token) return;
     setLoading(true);
     try {
-      const [resJobs, resApps, resBook, resChal, resProf] = await Promise.all([
-        fetchJobs(),
-        fetchMyApplications(user.token),
-        fetchBookmarks(user.token),
-        fetchChallenges(),
-        fetchStudent(user.uid).catch(() => ({ data: null }))
+      const [resJobs, resApps, resBook, resChal, resProf, resNotif] = await Promise.all([
+        fetchJobs().catch(() => ({ data: { jobs: [] } })),
+        fetchMyApplications().catch(() => ({ data: { applications: [] } })),
+        fetchBookmarks().catch(() => ({ data: { bookmarks: [] } })),
+        fetchChallenges().catch(() => ({ data: { challenges: [] } })),
+        fetchMyProfile(user.token).catch(() => ({ data: null })),
+        fetchNotifications().catch(() => ({ data: { notifications: [] } }))
       ]);
-      setJobs(resJobs.data.jobs);
-      setApplications(resApps.data.applications);
-      setBookmarks(resBook.data.bookmarks);
-      setChallenges(resChal.data.challenges);
-      setProfile(resProf.data);
+      
+      setJobs(resJobs?.data?.jobs || []);
+      setApplications(resApps?.data?.applications || []);
+      setBookmarks(resBook?.data?.bookmarks || []);
+      setChallenges(resChal?.data?.challenges || []);
+      setProfile(resProf?.data || null);
+      setNotifications(resNotif?.data?.notifications || []);
     } catch (err) {
       console.error(err);
-      toast.error('Failed to sync dashboard data.');
+      toast.error('Sync failed');
     } finally {
       setLoading(false);
     }
@@ -77,462 +83,214 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     loadData();
-  }, [isStudent]);
+  }, [isStudent, user?.token]);
 
-  const handleApplyInit = (job) => {
-    setApplyingJob(job);
-    setShowApplyModal(true);
-    setApplyForm({ coverLetter: `I am interested in the ${job.title} position at ${job.company}. I believe my skills match the requirements perfectly.`, resumeUpdate: null });
+  const handleBookmark = async (id) => {
+    try {
+      await toggleBookmark(id);
+      loadData();
+    } catch { toast.error('Bookmark failed'); }
   };
 
-  const submitApp = async () => {
+  const openApplyModal = (job) => {
+    setApplyingJob(job);
+    setApplyForm({ coverLetter: '' });
+    setShowApplyModal(true);
+  };
+
+  const closeApplyModal = () => {
+    setShowApplyModal(false);
+    setApplyingJob(null);
+    setApplyForm({ coverLetter: '' });
+  };
+
+  const submitApplication = async () => {
+    if (!applyingJob) return;
+    setIsSaving(true);
     try {
-      await applyToJob({
-        token: user.token,
-        job_id: applyingJob.id,
-        cover_letter: applyForm.coverLetter
-      });
-      toast.success('Application submitted successfully! 🚀');
-      setShowApplyModal(false);
+      await applyToJob({ token: user.token, job_id: applyingJob.id, cover_letter: applyForm.coverLetter });
+      toast.success('Application submitted!');
+      closeApplyModal();
       loadData();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Application failed');
-    }
-  };
-
-  const handleBookmark = async (jobId) => {
-    try {
-      await toggleBookmark(user.token, jobId);
-      loadData();
-    } catch {
-      toast.error('Bookmark update failed.');
-    }
-  };
-
-  const handleSaveProfile = async () => {
-    setIsSaving(true);
-    try {
-      await updateStudentProfile({
-        token: user.token,
-        ...profile
-      });
-      toast.success('Profile updated successfully! ✨');
-      setIsEditing(false);
-      loadData();
-    } catch {
-      toast.error('Failed to update profile.');
+      toast.error(err.response?.data?.detail || err.message || 'Application failed');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleResumeUpload = async (file) => {
-    if (!file) return;
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('token', user.token);
+  const openChallengeModal = (challenge) => {
+    setSelectedChallenge(challenge);
+    setShowChallengeModal(true);
+  };
 
-    setIsSaving(true);
-    try {
-      await uploadResume(profile.id, formData);
-      toast.success('Resume uploaded! 📄');
-      loadData();
-    } catch {
-      toast.error('Failed to upload resume.');
-    } finally {
-      setIsSaving(false);
-    }
+  const closeChallengeModal = () => {
+    setShowChallengeModal(false);
+    setSelectedChallenge(null);
   };
 
   if (!isStudent) {
     return (
-      <div className="page active" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '80vh' }}>
-        <div style={{ textAlign: 'center' }}>
-          <h2 style={{ fontSize: '2rem', fontWeight: 800 }}>Student Login Required</h2>
-          <p style={{ color: 'var(--muted)', marginTop: 10 }}>Please access your student portal to view this page.</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', textAlign: 'center' }}>
+        <div>
+          <h2 style={{ fontSize: '2rem', fontWeight: 800 }}>Session Expired</h2>
+          <button className="btn-primary" style={{ marginTop: 20 }} onClick={() => navigate('/')}>Back to Home</button>
         </div>
       </div>
     );
   }
 
-  const sections = [
-    { id: 'projects', label: 'My Projects', icon: <FiLayers /> },
-    { id: 'overview', label: 'Overview', icon: <FiHome /> },
-    { id: 'profile', label: 'My Profile', icon: <FiUser /> },
-    { id: 'jobs', label: 'Find Jobs', icon: <FiBriefcase /> },
-    { id: 'applications', label: 'Applications', icon: <FiSend /> },
-    { id: 'challenges', label: 'Challenges', icon: <FiTriangle /> },
-    { id: 'saved', label: 'Saved Jobs', icon: <FiStar /> },
-    { id: 'notifications', label: 'Notifications', icon: <FiBell /> },
-  ];
-
-  const handleTabClick = (id) => {
-    if (id === 'projects') {
-      navigate('/upload');
-      return;
-    }
-    setActiveTab(id);
-  };
-
   return (
-    <div className="page active" style={{ display: 'flex', minHeight: 'calc(100vh - 70px)', background: 'var(--bg)' }}>
-
-      {/* ── Sidebar ── */}
-      <aside style={{ width: 260, background: '#fff', borderRight: '1px solid var(--border)', padding: '32px 16px', position: 'sticky', top: 70, height: 'calc(100vh - 70px)' }}>
-        <div style={{ padding: '0 16px 24px', borderBottom: '1px solid var(--bg2)', marginBottom: 24 }}>
-          <div style={{ width: 48, height: 48, borderRadius: 14, background: 'var(--grad)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '1.2rem', marginBottom: 12 }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc', fontFamily: 'Inter, sans-serif' }}>
+      
+      {/* Sidebar */}
+      <aside style={{ width: 280, background: '#fff', borderRight: '1px solid #e2e8f0', padding: '40px 24px', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh' }}>
+        <div style={{ marginBottom: 40 }}>
+          <div style={{ width: 48, height: 48, background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', borderRadius: 14, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '1.2rem', marginBottom: 12 }}>
             {user.name[0]}
           </div>
-          <div style={{ fontWeight: 800, color: 'var(--ink)' }}>{user.name}</div>
-          <div style={{ fontSize: '.75rem', color: 'var(--muted)' }}>Student Participant</div>
+          <h3 style={{ fontWeight: 800, fontSize: '1.1rem', color: '#1e293b' }}>{user.name}</h3>
+          <p style={{ fontSize: '.75rem', color: '#64748b', fontWeight: 600 }}>Student Member</p>
         </div>
 
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {sections.map(s => (
-            <button
-              key={s.id}
-              onClick={() => handleTabClick(s.id)}
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+          {[
+            { id: 'overview', label: 'Dashboard', icon: <FiHome /> },
+            { id: 'profile', label: 'My Profile', icon: <FiUser /> },
+            { id: 'jobs', label: 'Find Jobs', icon: <FiBriefcase /> },
+            { id: 'bookmarks', label: 'Saved Jobs', icon: <FiStar /> },
+            { id: 'applications', label: 'My Apps', icon: <FiSend /> },
+            { id: 'challenges', label: 'Challenges', icon: <FiTriangle /> },
+            { id: 'notifications', label: 'Alerts', icon: <FiBell /> },
+          ].map(tab => (
+            <button 
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
               style={{
-                display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 12, border: 'none',
-                background: activeTab === s.id ? 'rgba(124, 58, 237, 0.08)' : 'transparent',
-                color: activeTab === s.id ? 'var(--violet)' : 'var(--muted)',
-                fontWeight: activeTab === s.id ? 700 : 600,
-                cursor: 'pointer', transition: 'all 0.2s', textAlign: 'left'
+                display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '12px 16px', borderRadius: 12, border: 'none',
+                background: activeTab === tab.id ? 'rgba(79,70,229,0.08)' : 'transparent',
+                color: activeTab === tab.id ? '#4f46e5' : '#64748b',
+                fontWeight: activeTab === tab.id ? 700 : 500, cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s'
               }}
             >
-              {s.icon} {s.label}
+              <span style={{ fontSize: '1.1rem' }}>{tab.icon}</span> {tab.label}
             </button>
           ))}
         </nav>
+
+        <button onClick={() => { logoutStudent(); navigate('/'); }} style={{ marginTop: 'auto', border: 'none', background: 'none', color: '#ef4444', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px' }}>
+          <FiLogOut size={18} /> Sign Out
+        </button>
       </aside>
 
-      {/* ── Main Content ── */}
-      <main style={{ flex: 1, padding: '40px' }}>
+      {/* Main Content */}
+      <main style={{ flex: 1, padding: '48px 60px', overflowY: 'auto' }}>
+        
         <AnimatePresence mode="wait">
-
-          {/* OVERVIEW SECTION */}
           {activeTab === 'overview' && (
-            <motion.div key="overview" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}>
-              <div style={{ marginBottom: 40 }}>
-                <h1 className="font-display" style={{ fontSize: '2.4rem', fontWeight: 800 }}>Welcome back, <span style={{ color: 'var(--violet)' }}>{user.name.split(' ')[0]}!</span></h1>
-                <p style={{ color: 'var(--muted)', marginTop: 8 }}>Track your career progress and explore new opportunities.</p>
-              </div>
+            <motion.div key="overview" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+              <header style={{ marginBottom: 40 }}>
+                <h1 style={{ fontWeight: 800, fontSize: '2.2rem', color: '#0f172a' }}>Dashboard <span style={{ color: '#4f46e5' }}>Overview</span></h1>
+                <p style={{ color: '#64748b', marginTop: 8 }}>Welcome back! Here's what's happening with your applications.</p>
+              </header>
 
-              {/* Stats Grid */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24, marginBottom: 40 }}>
                 {[
-                  { label: 'Jobs Applied', value: stats.applied, icon: <FiSend />, color: '#6366f1' },
+                  { label: 'Applied', value: stats.applied, icon: <FiSend />, color: '#6366f1' },
                   { label: 'Shortlisted', value: stats.shortlisted, icon: <FiCheckCircle />, color: '#10b981' },
-                  { label: 'Pending Review', value: stats.pending, icon: <FiClock />, color: '#f59e0b' }
+                  { label: 'Profile Rank', value: `${getCompleteness()}%`, icon: <FiTrendingUp />, color: '#f59e0b' }
                 ].map((s, i) => (
-                  <div key={i} className="card" style={{ padding: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div key={i} style={{ padding: 24, background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
                     <div>
-                      <div style={{ fontSize: '.85rem', fontWeight: 700, color: 'var(--muted)', marginBottom: 4 }}>{s.label}</div>
-                      <div style={{ fontSize: '2rem', fontWeight: 800 }}>{s.value}</div>
+                      <div style={{ color: '#64748b', fontSize: '.85rem', fontWeight: 600, marginBottom: 4 }}>{s.label}</div>
+                      <div style={{ fontSize: '2rem', fontWeight: 800, color: '#1e293b' }}>{s.value}</div>
                     </div>
-                    <div style={{ width: 50, height: 50, borderRadius: 12, background: s.color + '15', color: s.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem' }}>
-                      {s.icon}
-                    </div>
+                    <div style={{ width: 52, height: 52, borderRadius: 14, background: `${s.color}15`, color: s.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem' }}>{s.icon}</div>
                   </div>
                 ))}
               </div>
 
-              {/* Recent Activity / Profile Progress */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 32 }}>
-                <div className="card" style={{ padding: 32 }}>
-                  <h3 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: 24 }}>Recommended Jobs</h3>
+                <div style={{ background: '#fff', borderRadius: 24, border: '1px solid #e2e8f0', padding: 32 }}>
+                  <h3 style={{ fontWeight: 800, fontSize: '1.2rem', marginBottom: 24 }}>Recent Job Listings</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    {jobs.slice(0, 3).map(j => (
-                      <div key={j.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '16px', border: '1px solid var(--bg2)', borderRadius: 16 }}>
+                    {jobs.slice(0, 4).map(j => (
+                      <div key={j.id} style={{ padding: 20, background: '#f8fafc', borderRadius: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                          <div style={{ fontWeight: 800 }}>{j.title}</div>
-                          <div style={{ fontSize: '.85rem', color: 'var(--muted)' }}>{j.company} • {j.location}</div>
+                          <div style={{ fontWeight: 700, color: '#1e293b' }}>{j.title}</div>
+                          <div style={{ fontSize: '.8rem', color: '#64748b' }}>{j.company} • {j.location}</div>
                         </div>
-                        <button className="btn-secondary" onClick={() => setActiveTab('jobs')} style={{ padding: '6px 14px', fontSize: '.8rem' }}>View Details</button>
+                        <button onClick={() => setActiveTab('jobs')} style={{ background: '#fff', border: '1px solid #e2e8f0', padding: '8px 16px', borderRadius: 10, fontSize: '.8rem', fontWeight: 600, cursor: 'pointer' }}>View Details</button>
                       </div>
                     ))}
-                    {jobs.length === 0 && <p style={{ color: 'var(--muted)', textAlign: 'center' }}>No jobs available right now.</p>}
+                    {jobs.length === 0 && <p style={{ color: '#64748b', textAlign: 'center' }}>Searching for new roles...</p>}
                   </div>
                 </div>
 
-                <div className="card" style={{ padding: 24, background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', color: '#fff' }}>
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: 12 }}>Profile Completeness</h3>
-                  <div style={{ height: 10, background: 'rgba(255,255,255,.2)', borderRadius: 10, marginBottom: 4 }}>
-                    <div style={{ width: `${getCompleteness()}%`, height: '100%', background: '#fff', borderRadius: 10, boxShadow: '0 0 10px rgba(255,255,255,.5)', transition: 'width 0.5s ease' }}></div>
+                <div style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', borderRadius: 24, padding: 32, color: '#fff' }}>
+                  <h3 style={{ fontWeight: 800, fontSize: '1.1rem', marginBottom: 12 }}>Profile Completeness</h3>
+                  <div style={{ height: 8, background: 'rgba(255,255,255,0.2)', borderRadius: 10, marginBottom: 12 }}>
+                    <div style={{ width: `${getCompleteness()}%`, height: '100%', background: '#fff', borderRadius: 10 }}></div>
                   </div>
-                  <div style={{ fontSize: '.75rem', fontWeight: 700, textAlign: 'right', marginBottom: 12 }}>{getCompleteness()}% Complete</div>
-                  <p style={{ fontSize: '.85rem', lineHeight: 1.5, opacity: 0.9 }}>Add your resume and skills to stand out to recruiters and increase your hireability ranking.</p>
-                  <button onClick={() => setActiveTab('profile')} style={{ width: '100%', marginTop: 20, padding: '10px', borderRadius: 12, border: 'none', background: '#fff', color: 'var(--violet)', fontWeight: 700, cursor: 'pointer' }}>Complete Profile</button>
+                  <p style={{ fontSize: '.85rem', lineHeight: 1.6, opacity: 0.9, marginBottom: 24 }}>Complete your profile to unlock premium job recommendations.</p>
+                  <button onClick={() => setActiveTab('profile')} style={{ width: '100%', background: '#fff', color: '#4f46e5', border: 'none', padding: '12px', borderRadius: 12, fontWeight: 700, cursor: 'pointer' }}>Finish Profile</button>
                 </div>
               </div>
             </motion.div>
           )}
 
-          {/* JOBS SECTION */}
           {activeTab === 'jobs' && (
-            <motion.div key="jobs" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 32 }}>
-                <div>
-                  <h2 className="font-display" style={{ fontSize: '2rem', fontWeight: 800 }}>Explore <span style={{ color: 'var(--secondary)' }}>Opportunities</span></h2>
-                  <p style={{ color: 'var(--muted)' }}>Browse and apply to the best roles matching your profile.</p>
-                </div>
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <select className="select-modern" style={{ fontSize: '.85rem' }}><option>All Locations</option></select>
-                  <select className="select-modern" style={{ fontSize: '.85rem' }}><option>All Types</option></select>
-                </div>
-              </div>
-
+            <motion.div key="jobs" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <header style={{ marginBottom: 40 }}>
+                <h1 style={{ fontWeight: 800, fontSize: '2.2rem', color: '#0f172a' }}>Explore <span style={{ color: '#4f46e5' }}>Jobs</span></h1>
+                <p style={{ color: '#64748b' }}>Discover opportunities that match your professional goals.</p>
+              </header>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 24 }}>
                 {jobs.map(j => (
-                  <div key={j.id} className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                      <div style={{ width: 44, height: 44, background: 'var(--bg2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🏢</div>
-                      <button
-                        onClick={() => handleBookmark(j.id)}
-                        style={{ background: 'none', border: 'none', color: bookmarks.find(b => b.id === j.id) ? 'var(--secondary)' : 'var(--muted)', fontSize: '1.2rem', cursor: 'pointer' }}
-                      >
+                  <div key={j.id} style={{ background: '#fff', padding: 28, borderRadius: 24, border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
+                      <div style={{ width: 44, height: 44, background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🏢</div>
+                      <button onClick={() => handleBookmark(j.id)} style={{ background: 'none', border: 'none', color: bookmarks.find(b => b.id === j.id) ? '#f59e0b' : '#cbd5e1', cursor: 'pointer', fontSize: '1.4rem' }}>
                         <FiStar fill={bookmarks.find(b => b.id === j.id) ? 'currentColor' : 'none'} />
                       </button>
                     </div>
-                    <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: 4 }}>{j.title}</h3>
-                    <div style={{ fontSize: '.9rem', color: 'var(--muted)', fontWeight: 600, marginBottom: 16 }}>{j.company}</div>
-
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-                      <span style={{ fontSize: '.75rem', padding: '4px 10px', background: 'var(--bg2)', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 4 }}><FiMapPin /> {j.location}</span>
-                      <span style={{ fontSize: '.75rem', padding: '4px 10px', background: 'var(--bg2)', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 4 }}><FiTime /> {j.type}</span>
-                      <span style={{ fontSize: '.75rem', padding: '4px 10px', background: 'var(--bg2)', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 4 }}><FiDollarSign /> {j.salary}</span>
+                    <h3 style={{ fontWeight: 800, fontSize: '1.1rem', marginBottom: 4 }}>{j.title}</h3>
+                    <p style={{ color: '#64748b', fontSize: '.9rem', marginBottom: 20 }}>{j.company} • {j.location}</p>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+                      <span style={{ fontSize: '.75rem', padding: '4px 10px', background: '#f1f5f9', borderRadius: 20 }}>{j.type}</span>
+                      <span style={{ fontSize: '.75rem', padding: '4px 10px', background: '#f1f5f9', borderRadius: 20 }}>{j.salary}</span>
                     </div>
-
-                    <div style={{ marginTop: 'auto' }}>
-                      <button
-                        disabled={applications.find(a => a.job_id === j.id)}
-                        className="btn-primary"
-                        style={{ width: '100%', padding: '12px', background: applications.find(a => a.job_id === j.id) ? 'var(--muted)' : 'var(--grad)' }}
-                        onClick={() => handleApplyInit(j)}
-                      >
-                        {applications.find(a => a.job_id === j.id) ? 'Applied' : 'Apply Now'}
-                      </button>
-                    </div>
+                    <button className="btn-primary" onClick={() => openApplyModal(j)} style={{ width: '100%', marginTop: 'auto' }}>Apply Now</button>
                   </div>
                 ))}
               </div>
             </motion.div>
           )}
 
-          {/* PROFILE SECTION */}
-          {activeTab === 'profile' && (
-            <motion.div key="profile" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 30 }}>
-                <h2 className="font-display" style={{ fontSize: '2rem', fontWeight: 800 }}>My <span style={{ color: 'var(--secondary)' }}>Profile</span></h2>
-                {isEditing ? (
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <button className="btn-secondary" onClick={() => { setIsEditing(false); loadData(); }}>Cancel</button>
-                    <button className="btn-primary" onClick={handleSaveProfile} disabled={isSaving}>
-                      {isSaving ? 'Saving...' : 'Save Profile'}
-                    </button>
-                  </div>
-                ) : (
-                  <button className="btn-secondary" onClick={() => setIsEditing(true)} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <FiEdit2 /> Edit Profile
-                  </button>
-                )}
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 300px', gap: 32 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-                  {/* Info Card */}
-                  <div className="card" style={{ padding: 32 }}>
-                    <h4 style={{ textTransform: 'uppercase', fontSize: '.75rem', letterSpacing: 1, color: 'var(--muted)', marginBottom: 20 }}>Personal Information</h4>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-                      <div className="form-field"><label>Full Name</label><input disabled value={user.name} /></div>
-                      <div className="form-field"><label>Email Address</label><input disabled value={user.email} /></div>
-                      <div className="form-field">
-                        <label>Phone</label>
-                        <input
-                          placeholder="Not set"
-                          disabled={!isEditing}
-                          value={profile?.phone || ''}
-                          onChange={e => setProfile({ ...profile, phone: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-field">
-                        <label>Location (City)</label>
-                        <input
-                          placeholder="e.g. Chennai"
-                          disabled={!isEditing}
-                          value={profile?.city || ''}
-                          onChange={e => setProfile({ ...profile, city: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="card" style={{ padding: 32 }}>
-                    <h4 style={{ textTransform: 'uppercase', fontSize: '.75rem', letterSpacing: 1, color: 'var(--muted)', marginBottom: 20 }}>Professional Links</h4>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-                      <div className="form-field">
-                        <label>LinkedIn</label>
-                        <div style={{ display: 'flex', gap: 10 }}>
-                          <FiLinkedin style={{ marginTop: 14 }} />
-                          <input
-                            placeholder="linkedin.com/in/..."
-                            disabled={!isEditing}
-                            value={profile?.linkedin || ''}
-                            onChange={e => setProfile({ ...profile, linkedin: e.target.value })}
-                          />
-                        </div>
-                      </div>
-                      <div className="form-field">
-                        <label>GitHub</label>
-                        <div style={{ display: 'flex', gap: 10 }}>
-                          <FiGithub style={{ marginTop: 14 }} />
-                          <input
-                            placeholder="github.com/..."
-                            disabled={!isEditing}
-                            value={profile?.github || ''}
-                            onChange={e => setProfile({ ...profile, github: e.target.value })}
-                          />
-                        </div>
-                      </div>
-                      <div className="form-field">
-                        <label>Portfolio URL</label>
-                        <div style={{ display: 'flex', gap: 10 }}>
-                          <FiGlobe style={{ marginTop: 14 }} />
-                          <input
-                            placeholder="yourportfolio.com"
-                            disabled={!isEditing}
-                            value={profile?.portfolio_url || ''}
-                            onChange={e => setProfile({ ...profile, portfolio_url: e.target.value })}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="card" style={{ padding: 32 }}>
-                    <h4 style={{ textTransform: 'uppercase', fontSize: '.75rem', letterSpacing: 1, color: 'var(--muted)', marginBottom: 20 }}>Education & Experience</h4>
-                    <div className="form-field">
-                      <label>Experience / Project Highlights</label>
-                      <textarea
-                        placeholder="Tell us about your background..."
-                        style={{ minHeight: 100 }}
-                        disabled={!isEditing}
-                        value={profile?.experience || ''}
-                        onChange={e => setProfile({ ...profile, experience: e.target.value })}
-                      />
-                    </div>
-                    <div style={{ marginTop: 20 }}>
-                      <label style={{ fontSize: '.85rem', fontWeight: 700, display: 'block', marginBottom: 8 }}>Top Skills</label>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                        {profile?.skills?.map((s, i) => (
-                          <span key={i} style={{ padding: '6px 14px', background: 'var(--bg2)', borderRadius: 10, fontSize: '.85rem', display: 'flex', gap: 8, alignItems: 'center' }}>
-                            {s}
-                            {isEditing && <FiXCircle style={{ cursor: 'pointer' }} onClick={() => setProfile({ ...profile, skills: profile.skills.filter((_, idx) => idx !== i) })} />}
-                          </span>
-                        ))}
-                        {isEditing && (
-                          <button
-                            onClick={() => {
-                              const s = prompt('Enter new skill:');
-                              if (s) setProfile({ ...profile, skills: [...(profile.skills || []), s] });
-                            }}
-                            style={{ padding: '6px 14px', border: '1px dashed var(--muted)', borderRadius: 10, background: 'none', color: 'var(--muted)', fontSize: '.85rem', cursor: 'pointer' }}
-                          >
-                            + Add Skill
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-                  <div className="card" style={{ padding: 24, textAlign: 'center' }}>
-                    <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>📄</div>
-                    <h4 style={{ fontWeight: 800, marginBottom: 8 }}>My Resume</h4>
-                    <p style={{ fontSize: '.8rem', color: 'var(--muted)', marginBottom: 20 }}>Upload a PDF resume for recruiters to review.</p>
-
-                    {profile?.resume_path && (
-                      <a
-                        href={`http://127.0.0.1:8000/uploads/${profile.resume_path}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn-secondary"
-                        style={{ width: '100%', marginBottom: 10, textDecoration: 'none', display: 'flex', justifyContent: 'center', gap: 8, alignItems: 'center' }}
-                      >
-                        <FiDownload /> View Current
-                      </a>
-                    )}
-
-                    <input
-                      type="file"
-                      id="resume-upload"
-                      accept=".pdf"
-                      style={{ display: 'none' }}
-                      onChange={e => handleResumeUpload(e.target.files[0])}
-                    />
-                    <button
-                      className="btn-primary"
-                      style={{ width: '100%' }}
-                      onClick={() => document.getElementById('resume-upload').click()}
-                      disabled={isSaving}
-                    >
-                      {isSaving ? 'Uploading...' : (profile?.resume_path ? 'Update Resume' : 'Upload PDF')}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* APPLICATIONS TRACKER SECTION */}
-          {activeTab === 'applications' && (
-            <motion.div key="applications" initial={{ opacity: 0 }}>
-              <h2 className="font-display" style={{ fontSize: '2rem', fontWeight: 800, marginBottom: 32 }}>Application <span style={{ color: 'var(--secondary)' }}>Tracker</span></h2>
-
-              {applications.length === 0 ? (
-                <div className="card" style={{ padding: 60, textAlign: 'center' }}>
-                  <p style={{ color: 'var(--muted)' }}>You haven't applied to any jobs yet.</p>
-                  <button className="btn-primary" style={{ marginTop: 20 }} onClick={() => setActiveTab('jobs')}>Browse Jobs →</button>
+          {activeTab === 'bookmarks' && (
+            <motion.div key="bookmarks" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <h1 style={{ fontWeight: 800, fontSize: '2.2rem', color: '#0f172a', marginBottom: 32 }}>Saved <span style={{ color: '#4f46e5' }}>Jobs</span></h1>
+              {bookmarks.length === 0 ? (
+                <div style={{ padding: 60, textAlign: 'center', background: '#fff', borderRadius: 24, border: '1px dashed #cbd5e1' }}>
+                  <p style={{ color: '#64748b' }}>No bookmarked jobs yet.</p>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {applications.map(app => (
-                    <div key={app.id} className="card" style={{ padding: 24, display: 'grid', gridTemplateColumns: '1fr auto 200px', alignItems: 'center', gap: 32 }}>
-                      <div>
-                        <h3 style={{ fontWeight: 800 }}>{app.title}</h3>
-                        <div style={{ fontSize: '.85rem', color: 'var(--muted)' }}>{app.company} • {app.location}</div>
-                        <div style={{ fontSize: '.75rem', color: 'var(--muted)', marginTop: 4 }}>Applied on {new Date(app.applied_at).toLocaleDateString()}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 24 }}>
+                  {bookmarks.map(b => (
+                    <div key={b.id} style={{ background: '#fff', padding: 28, borderRadius: 24, border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
+                        <div style={{ width: 44, height: 44, background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🏢</div>
+                        <button onClick={() => handleBookmark(b.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '1.4rem' }}>
+                          <FiX />
+                        </button>
                       </div>
-                      <div style={{ display: 'flex', gap: 12 }}>
-                        {['Applied', 'Under Review', 'Selected'].map((step, i) => {
-                          const stages = { applied: 0, review: 1, shortlisted: 2, rejected: -1 };
-                          const currentIdx = stages[app.status] ?? 0;
-                          const isDone = i <= currentIdx;
-                          const isCurrent = i === currentIdx;
-                          const isRejected = app.status === 'rejected' && i === currentIdx;
-
-                          return (
-                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <div style={{ width: 12, height: 12, borderRadius: '50%', background: isRejected ? '#ef4444' : (isDone ? 'var(--violet)' : 'var(--bg2)'), position: 'relative' }}>
-                                {isCurrent && !isRejected && <div style={{ position: 'absolute', top: -4, left: -4, right: -4, bottom: -4, border: '2px solid var(--violet)', borderRadius: '50%', animation: 'ping 1.5s infinite' }}></div>}
-                              </div>
-                              <span style={{ fontSize: '.7rem', fontWeight: isDone ? 700 : 500, color: isDone ? 'var(--violet)' : 'var(--muted)' }}>{step}</span>
-                              {i < 2 && <div style={{ width: 24, height: 2, background: (isDone && i < currentIdx) ? 'var(--violet)' : 'var(--bg2)' }}></div>}
-                            </div>
-                          );
-                        })}
+                      <h3 style={{ fontWeight: 800, fontSize: '1.1rem', marginBottom: 4 }}>{b.title}</h3>
+                      <p style={{ color: '#64748b', fontSize: '.9rem', marginBottom: 20 }}>{b.company} • {b.location}</p>
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+                        <span style={{ fontSize: '.75rem', padding: '4px 10px', background: '#f1f5f9', borderRadius: 20 }}>{b.type}</span>
+                        <span style={{ fontSize: '.75rem', padding: '4px 10px', background: '#f1f5f9', borderRadius: 20 }}>{b.salary}</span>
                       </div>
-                      <div style={{ textAlign: 'right', display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center' }}>
-                        <span style={{
-                          padding: '6px 14px', borderRadius: 20, fontSize: '.8rem', fontWeight: 700,
-                          background: app.status === 'rejected' ? '#fee2e2' : (app.status === 'shortlisted' ? '#dcfce7' : '#f0f9ff'),
-                          color: app.status === 'rejected' ? '#b91c1c' : (app.status === 'shortlisted' ? '#15803d' : '#0369a1')
-                        }}>
-                          {app.status === 'shortlisted' ? 'Direct Selection' : app.status[0].toUpperCase() + app.status.slice(1).replace('_', ' ')}
-                        </span>
-                        <button className="btn-secondary" style={{ padding: '6px', borderRadius: 8 }} title="Chat with HR"><FiMessageSquare /></button>
-                      </div>
+                      <button className="btn-primary" onClick={() => openApplyModal(b)} style={{ width: '100%', marginTop: 'auto' }}>Apply Now</button>
                     </div>
                   ))}
                 </div>
@@ -540,99 +298,241 @@ export default function StudentDashboard() {
             </motion.div>
           )}
 
-          {/* CHALLENGES tab */}
+          {showApplyModal && (
+            <motion.div key="apply-modal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(15, 23, 42, 0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, overflowY: 'auto' }}>
+              <div style={{ width: '100%', maxWidth: 680, background: '#fff', borderRadius: 24, padding: 40, position: 'relative', boxShadow: '0 24px 80px rgba(15,23,42,.18)', my: 'auto' }}>
+                <button onClick={closeApplyModal} style={{ position: 'absolute', top: 20, right: 20, border: 'none', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '1.4rem' }}><FiX /></button>
+                
+                {/* Job Header */}
+                <div style={{ marginBottom: 32 }}>
+                  <div style={{ fontSize: '0.85rem', color: '#4f46e5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>Job Details</div>
+                  <h2 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: 12, color: '#0f172a' }}>{applyingJob?.title}</h2>
+                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '.95rem', color: '#64748b' }}>
+                      <span>🏢</span> {applyingJob?.company}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '.95rem', color: '#64748b' }}>
+                      <span>📍</span> {applyingJob?.location}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '.95rem', color: '#64748b' }}>
+                      <span>💼</span> {applyingJob?.type}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '.95rem', color: '#64748b' }}>
+                      <span>💰</span> {applyingJob?.salary}
+                    </div>
+                  </div>
+                  <div style={{ padding: 16, background: '#f8fafc', borderRadius: 14, marginBottom: 20 }}>
+                    <p style={{ fontSize: '.95rem', lineHeight: 1.6, color: '#475569', margin: 0 }}>{applyingJob?.description}</p>
+                  </div>
+                </div>
+
+                {/* Requirements & Skills */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 32 }}>
+                  {applyingJob?.requirements && applyingJob.requirements.length > 0 && (
+                    <div>
+                      <h4 style={{ fontSize: '.9rem', fontWeight: 700, color: '#1e293b', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Requirements</h4>
+                      <ul style={{ margin: 0, paddingLeft: 20 }}>
+                        {applyingJob.requirements.slice(0, 4).map((req, i) => (
+                          <li key={i} style={{ fontSize: '.85rem', color: '#64748b', marginBottom: 6 }}>{req}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {applyingJob?.skills_needed && applyingJob.skills_needed.length > 0 && (
+                    <div>
+                      <h4 style={{ fontSize: '.9rem', fontWeight: 700, color: '#1e293b', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Skills Needed</h4>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {applyingJob.skills_needed.slice(0, 5).map((skill, i) => (
+                          <span key={i} style={{ fontSize: '.8rem', padding: '4px 12px', background: '#4f46e510', color: '#4f46e5', borderRadius: 20, fontWeight: 600 }}>{skill}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Divider */}
+                <div style={{ height: 1, background: '#e2e8f0', marginBottom: 32 }} />
+
+                {/* Application Form */}
+                <div>
+                  <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#1e293b', marginBottom: 16 }}>Your Submission</h4>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', fontWeight: 600, marginBottom: 8, color: '#1e293b', fontSize: '.95rem' }}>Cover Letter</label>
+                    <textarea value={applyForm.coverLetter} onChange={e => setApplyForm({ ...applyForm, coverLetter: e.target.value })} placeholder="Tell us why you're interested in this role and how your skills match the requirements..." style={{ width: '100%', minHeight: 120, padding: 16, borderRadius: 12, border: '1px solid #e2e8f0', fontSize: '0.95rem', resize: 'vertical', fontFamily: 'inherit' }} />
+                  </div>
+                  <p style={{ fontSize: '.8rem', color: '#94a3b8', marginBottom: 24 }}>Make your application stand out. Share your motivation and relevant experience.</p>
+                </div>
+
+                {/* Action Buttons */}
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 20, borderTop: '1px solid #e2e8f0' }}>
+                  <button onClick={closeApplyModal} style={{ padding: '12px 24px', borderRadius: 12, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+                  <button onClick={submitApplication} disabled={isSaving} className="btn-primary" style={{ padding: '12px 24px', borderRadius: 12 }}>{isSaving ? '⏳ Submitting...' : '✓ Submit Application'}</button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'applications' && (
+            <motion.div key="applications" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <h1 style={{ fontWeight: 800, fontSize: '2.2rem', color: '#0f172a', marginBottom: 32 }}>My <span style={{ color: '#4f46e5' }}>Applications</span></h1>
+              {applications.length === 0 ? (
+                <div style={{ padding: 60, textAlign: 'center', background: '#fff', borderRadius: 24, border: '1px dashed #cbd5e1' }}>
+                  <p style={{ color: '#64748b', marginBottom: 20 }}>You haven't applied to any jobs yet.</p>
+                  <button className="btn-primary" onClick={() => setActiveTab('jobs')}>Browse Jobs →</button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {applications.map(app => (
+                    <div key={app.id} style={{ background: '#fff', padding: 24, borderRadius: 20, border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <h3 style={{ fontWeight: 800, color: '#1e293b' }}>{app.title}</h3>
+                        <p style={{ color: '#64748b', fontSize: '.85rem' }}>{app.company} • {app.location}</p>
+                        <p style={{ color: '#94a3b8', fontSize: '.75rem', marginTop: 4 }}>Applied {new Date(app.applied_at).toLocaleDateString()}</p>
+                        {app.cover_letter ? (
+                          <p style={{ color: '#475569', fontSize: '.82rem', marginTop: 10, lineHeight: 1.5 }}>{app.cover_letter.length > 140 ? `${app.cover_letter.slice(0, 140)}...` : app.cover_letter}</p>
+                        ) : null}
+                      </div>
+                      <span style={{
+                        padding: '8px 18px', borderRadius: 20, fontSize: '.8rem', fontWeight: 700,
+                        background: app.status === 'shortlisted' ? '#dcfce7' : app.status === 'rejected' ? '#fee2e2' : '#f0f9ff',
+                        color: app.status === 'shortlisted' ? '#15803d' : app.status === 'rejected' ? '#b91c1c' : '#0369a1'
+                      }}>
+                        {app.status?.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
+
           {activeTab === 'challenges' && (
-            <motion.div key="challenges" initial={{ opacity: 0 }}>
-              <h2 className="font-display" style={{ fontSize: '2rem', fontWeight: 800, marginBottom: 8 }}>Skill <span style={{ color: 'var(--secondary)' }}>Challenges</span></h2>
-              <p style={{ color: 'var(--muted)', marginBottom: 32 }}>Solve projects from top companies and increase your hireability ranking.</p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 24 }}>
+            <motion.div key="challenges" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <h1 style={{ fontWeight: 800, fontSize: '2.2rem', color: '#0f172a', marginBottom: 8 }}>Skill <span style={{ color: '#4f46e5' }}>Challenges</span></h1>
+              <p style={{ color: '#64748b', marginBottom: 32 }}>Solve real projects from top companies and boost your hireability.</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 24 }}>
                 {challenges.map(c => (
-                  <div key={c.id} className="card" style={{ padding: 24 }}>
-                    <div style={{ width: 44, height: 44, background: '#fef3c7', color: '#d97706', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', marginBottom: 16 }}>🏆</div>
+                  <div key={c.id} style={{ background: '#fff', padding: 28, borderRadius: 24, border: '1px solid #e2e8f0' }}>
+                    <div style={{ width: 44, height: 44, background: '#fef3c7', color: '#d97706', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', marginBottom: 16 }}>🏆</div>
                     <h3 style={{ fontWeight: 800, marginBottom: 8 }}>{c.title}</h3>
-                    <p style={{ fontSize: '.85rem', color: 'var(--muted)', lineHeight: 1.5, height: 45, overflow: 'hidden' }}>{c.description}</p>
-                    <hr style={{ borderTop: '1px solid var(--bg2)', margin: '16px 0' }} />
+                    <p style={{ fontSize: '.85rem', color: '#64748b', lineHeight: 1.5, marginBottom: 20 }}>{c.description}</p>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: '.75rem', color: '#b45309', fontWeight: 700 }}>Deadline: {c.deadline}</span>
-                      <button className="btn-secondary" style={{ padding: '6px 14px' }}>View Project</button>
+                      <button onClick={() => navigate('/challenges', { state: { challenge: c } })} style={{ padding: '8px 16px', borderRadius: 10, border: '1px solid #e2e8f0', background: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: '.85rem' }}>Start Challenge</button>
                     </div>
                   </div>
                 ))}
+                {challenges.length === 0 && <p style={{ color: '#64748b' }}>No challenges available right now.</p>}
               </div>
             </motion.div>
           )}
 
-          {/* NOTIFICATIONS SECTION */}
+          {showChallengeModal && (
+            <motion.div key="challenge-modal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(15, 23, 42, 0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, overflowY: 'auto' }}>
+              <div style={{ width: '100%', maxWidth: 680, background: '#fff', borderRadius: 24, padding: 40, position: 'relative', boxShadow: '0 24px 80px rgba(15,23,42,.18)' }}>
+                <button onClick={closeChallengeModal} style={{ position: 'absolute', top: 20, right: 20, border: 'none', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '1.4rem' }}><FiX /></button>
+                
+                {/* Challenge Header */}
+                <div style={{ marginBottom: 32 }}>
+                  <div style={{ fontSize: '0.85rem', color: '#d97706', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span>🏆</span> Challenge
+                  </div>
+                  <h2 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: 12, color: '#0f172a' }}>{selectedChallenge?.title}</h2>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '.95rem', color: '#64748b', marginBottom: 20 }}>
+                    <span>📅</span> Deadline: {selectedChallenge?.deadline}
+                  </div>
+                  <div style={{ padding: 20, background: '#fef3c7', borderRadius: 14, marginBottom: 20 }}>
+                    <p style={{ fontSize: '.95rem', lineHeight: 1.6, color: '#92400e', margin: 0 }}>{selectedChallenge?.description}</p>
+                  </div>
+                </div>
+
+                {/* Challenge Details */}
+                <div style={{ marginBottom: 24, padding: 20, background: '#f8fafc', borderRadius: 14 }}>
+                  <h4 style={{ fontSize: '.9rem', fontWeight: 700, color: '#1e293b', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>About This Challenge</h4>
+                  <p style={{ fontSize: '.95rem', lineHeight: 1.6, color: '#475569', margin: 0 }}>This is a real-world project challenge designed to test your skills and expertise. Complete the challenge successfully to boost your hireability and showcase your abilities to recruiters.</p>
+                </div>
+
+                {/* Action Buttons */}
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 20, borderTop: '1px solid #e2e8f0' }}>
+                  <button onClick={closeChallengeModal} style={{ padding: '12px 24px', borderRadius: 12, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', cursor: 'pointer', fontWeight: 600 }}>Close</button>
+                  <button className="btn-primary" style={{ padding: '12px 24px', borderRadius: 12 }}>🚀 Start Challenge</button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'profile' && (
+            <motion.div key="profile" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
+                <h1 style={{ fontWeight: 800, fontSize: '2.2rem', color: '#0f172a' }}>My <span style={{ color: '#4f46e5' }}>Profile</span></h1>
+                <button onClick={() => setIsEditing(!isEditing)} style={{ padding: '10px 24px', borderRadius: 12, border: '1px solid #4f46e5', background: isEditing ? '#4f46e5' : '#fff', color: isEditing ? '#fff' : '#4f46e5', fontWeight: 700, cursor: 'pointer' }}>
+                  {isEditing ? 'Cancel' : '✏️ Edit Profile'}
+                </button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 32 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                  <div style={{ background: '#fff', padding: 32, borderRadius: 24, border: '1px solid #e2e8f0' }}>
+                    <h4 style={{ fontWeight: 700, fontSize: '.75rem', textTransform: 'uppercase', letterSpacing: 1, color: '#94a3b8', marginBottom: 20 }}>Personal Info</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                      <div><label style={{ fontSize: '.8rem', fontWeight: 600, display: 'block', marginBottom: 6 }}>Full Name</label><input disabled value={user.name} style={{ width: '100%', padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: 10, background: '#f8fafc' }} /></div>
+                      <div><label style={{ fontSize: '.8rem', fontWeight: 600, display: 'block', marginBottom: 6 }}>Email</label><input disabled value={user.email || ''} style={{ width: '100%', padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: 10, background: '#f8fafc' }} /></div>
+                      <div><label style={{ fontSize: '.8rem', fontWeight: 600, display: 'block', marginBottom: 6 }}>Phone</label><input disabled={!isEditing} value={profile?.phone || ''} onChange={e => setProfile({ ...profile, phone: e.target.value })} placeholder="Not set" style={{ width: '100%', padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: 10 }} /></div>
+                      <div><label style={{ fontSize: '.8rem', fontWeight: 600, display: 'block', marginBottom: 6 }}>City</label><input disabled={!isEditing} value={profile?.city || ''} onChange={e => setProfile({ ...profile, city: e.target.value })} placeholder="e.g. Chennai" style={{ width: '100%', padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: 10 }} /></div>
+                      {profile?.skills && profile.skills.length > 0 && (
+                        <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '.8rem', fontWeight: 600, display: 'block', marginBottom: 8 }}>Skills</label><div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{profile.skills.map((s, i) => <span key={i} style={{ fontSize: '.75rem', padding: '4px 10px', background: '#4f46e510', color: '#4f46e5', borderRadius: 20, fontWeight: 600 }}>{s}</span>)}</div></div>
+                      )}
+                      {profile?.linkedin && <div><label style={{ fontSize: '.8rem', fontWeight: 600, display: 'block', marginBottom: 6 }}>LinkedIn</label><a href={profile.linkedin} target="_blank" rel="noreferrer" style={{ fontSize: '.85rem', color: '#4f46e5', textDecoration: 'none', fontWeight: 600 }}>View Profile →</a></div>}
+                      {profile?.github && <div><label style={{ fontSize: '.8rem', fontWeight: 600, display: 'block', marginBottom: 6 }}>GitHub</label><a href={profile.github} target="_blank" rel="noreferrer" style={{ fontSize: '.85rem', color: '#4f46e5', textDecoration: 'none', fontWeight: 600 }}>View Profile →</a></div>}
+                    </div>
+                  </div>
+                  {isEditing && (
+                    <button onClick={async () => { setIsSaving(true); try { const { updateStudentProfile } = await import('../services/api'); await updateStudentProfile({ token: user.token, ...profile }); toast.success('Profile saved!'); setIsEditing(false); } catch { toast.error('Save failed'); } finally { setIsSaving(false); } }} style={{ padding: '14px', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 14, fontWeight: 700, cursor: 'pointer', fontSize: '1rem' }} disabled={isSaving}>
+                      {isSaving ? 'Saving...' : 'Save Profile'}
+                    </button>
+                  )}
+                </div>
+                <div style={{ background: '#fff', padding: 28, borderRadius: 24, border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                  <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>📄</div>
+                  <h4 style={{ fontWeight: 800, marginBottom: 8 }}>Resume</h4>
+                  <p style={{ fontSize: '.8rem', color: '#64748b', marginBottom: 20 }}>Upload a PDF for recruiters.</p>
+                  {profile?.resume_path && <a href={`http://127.0.0.1:8000/uploads/${profile.resume_path}`} target="_blank" rel="noreferrer" style={{ display: 'block', padding: '10px', marginBottom: 10, background: '#f8fafc', borderRadius: 10, textDecoration: 'none', color: '#4f46e5', fontWeight: 600, fontSize: '.85rem' }}>📥 View Current</a>}
+                  <input type="file" id="resume-upload" accept=".pdf" style={{ display: 'none' }} onChange={async (e) => { const file = e.target.files[0]; if (!file) return; setIsSaving(true); try { await uploadResume(file, user.token); toast.success('Resume uploaded!'); loadData(); } catch { toast.error('Upload failed'); } finally { setIsSaving(false); } }} />
+                  <button onClick={() => document.getElementById('resume-upload').click()} style={{ width: '100%', padding: '12px', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 12, fontWeight: 700, cursor: 'pointer' }} disabled={isSaving}>{isSaving ? 'Uploading...' : profile?.resume_path ? 'Update Resume' : 'Upload PDF'}</button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {activeTab === 'notifications' && (
-            <motion.div key="notifications" initial={{ opacity: 0 }}>
-              <h2 className="font-display" style={{ fontSize: '2rem', fontWeight: 800, marginBottom: 32 }}>Active <span style={{ color: 'var(--secondary)' }}>Alerts</span></h2>
+            <motion.div key="notifications" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <h1 style={{ fontWeight: 800, fontSize: '2.2rem', color: '#0f172a', marginBottom: 32 }}>Recent <span style={{ color: '#4f46e5' }}>Alerts</span></h1>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {[
-                  { t: 'Application Update', m: 'TechCorp viewed your application for Junior React Developer.', time: '2 hours ago', icon: <FiInfo />, color: '#3b82f6' },
-                  { t: 'New Message', m: 'HR from CreativeBox sent you a message regarding your portfolio.', time: '5 hours ago', icon: <FiMessageSquare />, color: '#10b981' },
-                  { t: 'New Job Alert', m: 'A new Python Intern role was posted by DataStream.', time: '1 day ago', icon: <FiBell />, color: '#f59e0b' }
-                ].map((n, i) => (
-                  <div key={i} className="card" style={{ padding: '16px 24px', display: 'flex', gap: 20, alignItems: 'center' }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 10, background: n.color + '15', color: n.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{n.icon}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 800, fontSize: '.95rem' }}>{n.t}</div>
-                      <div style={{ fontSize: '.85rem', color: 'var(--muted)' }}>{n.m}</div>
-                    </div>
-                    <div style={{ fontSize: '.75rem', color: 'var(--muted)' }}>{n.time}</div>
+                {notifications.length === 0 ? (
+                  <div style={{ padding: 40, textAlign: 'center', background: '#fff', borderRadius: 24, border: '1px dashed #cbd5e1' }}>
+                    <p style={{ color: '#64748b', fontSize: '1rem' }}>No alerts at this time.</p>
                   </div>
-                ))}
+                ) : (
+                  notifications.map(n => {
+                    const isJobNotif = n.type === 'job';
+                    const icon = isJobNotif ? '💼' : '🔔';
+                    const bgColor = isJobNotif ? '#f0f9ff' : '#f8fafc';
+                    return (
+                      <div key={n.id} style={{ padding: 20, background: bgColor, borderRadius: 16, border: isJobNotif ? '1px solid #bfdbfe' : '1px solid #e2e8f0', display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 12, background: isJobNotif ? '#0ea5e910' : '#4f46e510', color: isJobNotif ? '#0ea5e9' : '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', flexShrink: 0 }}>{icon}</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 700, color: '#1e293b', marginBottom: 4 }}>{n.title}</div>
+                          <div style={{ fontSize: '.85rem', color: '#64748b', lineHeight: 1.5 }}>{n.message}</div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </motion.div>
           )}
-
 
         </AnimatePresence>
       </main>
-
-      {/* ── APPLY MODAL ── */}
-      {showApplyModal && applyingJob && (
-        <div className="overlay" style={{ zIndex: 900 }} onClick={e => e.target === e.currentTarget && setShowApplyModal(false)}>
-          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="modal" style={{ width: 500 }}>
-            <div style={{ padding: '24px 28px', borderBottom: '1px solid var(--bg2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontWeight: 800 }}>Apply for {applyingJob.title}</h3>
-              <button style={{ background: 'none', border: 'none', fontSize: '1.4rem' }} onClick={() => setShowApplyModal(false)}><FiX /></button>
-            </div>
-            <div style={{ padding: 28 }}>
-              <div style={{ padding: 12, background: 'var(--bg2)', borderRadius: 10, fontSize: '.8rem', color: 'var(--muted)', marginBottom: 20, display: 'flex', gap: 10 }}>
-                <FiInfo style={{ flexShrink: 0, marginTop: 2 }} />
-                <span>Your profile (Name, Email, Phone) will be automatically shared with <strong>{applyingJob.company}</strong>.</span>
-              </div>
-
-              <div className="form-field" style={{ marginBottom: 20 }}>
-                <label>Cover Letter (Optional)</label>
-                <textarea
-                  value={applyForm.coverLetter}
-                  onChange={e => setApplyForm({ ...applyForm, coverLetter: e.target.value })}
-                  placeholder="Why should we hire you?" style={{ minHeight: 120 }}
-                />
-              </div>
-
-              <div className="form-field" style={{ marginBottom: 24 }}>
-                <label>Update Resume for this job? (Optional)</label>
-                <div style={{ border: '2px dashed var(--bg2)', borderRadius: 12, padding: 20, textAlign: 'center', cursor: 'pointer' }}>
-                  <FiDownload size={20} style={{ color: 'var(--muted)' }} />
-                  <div style={{ fontSize: '.75rem', color: 'var(--muted)', marginTop: 8 }}>Click to upload new PDF version</div>
-                </div>
-              </div>
-
-              <button className="btn-primary" style={{ width: '100%' }} onClick={submitApp}>Send Application →</button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      <style>{`
-        .select-modern { padding: 8px 14px; border-radius: 10px; border: 1px solid var(--border); background: #fff; font-weight: 600; outline: none; }
-        @keyframes ping {
-           0% { transform: scale(1); opacity: 0.8; }
-           100% { transform: scale(2); opacity: 0; }
-        }
-      `}</style>
     </div>
   );
 }

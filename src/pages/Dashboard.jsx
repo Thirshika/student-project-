@@ -7,6 +7,7 @@ import { FiUsers, FiStar, FiPhoneCall, FiCalendar, FiCheck, FiX, FiFileText, FiD
 import toast from 'react-hot-toast';
 
 const STAGES = {
+  applied: { icon: '📩', l: 'Applied', bg: '#6366f1' },
   new: { icon: '🔵', l: 'New', bg: 'var(--muted)' },
   shortlisted: { icon: '⭐', l: 'Shortlisted', bg: '#3b82f6' },
   contacted: { icon: '📞', l: 'Contacted', bg: '#f59e0b' },
@@ -35,7 +36,9 @@ export default function Dashboard() {
     try {
       const res = await fetchMyJobs();
       setHrJobs(res.data.jobs);
-    } catch { toast.error('Failed to load your jobs.'); }
+    } catch (err) { 
+      toast.error(err.response?.data?.detail || 'Failed to load your jobs.'); 
+    }
   };
 
   const loadData = async () => {
@@ -47,17 +50,19 @@ export default function Dashboard() {
       ]);
       setList(resSl.data.shortlist);
       setStats(resSt.data);
-    } catch {
-      toast.error('Failed to load dashboard data.');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to load dashboard data.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
-    if (isHR) loadHRJobs();
-  }, [isHR]);
+    if (isHR && isApprovedHR) {
+      loadData();
+      loadHRJobs();
+    }
+  }, [isHR, isApprovedHR]);
 
   const handlePostJob = async (e) => {
     e.preventDefault();
@@ -103,9 +108,9 @@ export default function Dashboard() {
 
   const handleExport = () => {
     if (list.length === 0) return toast.error('Nothing to export');
-    const headers = ['Name', 'Email', 'College', 'Domain', 'Project', 'Stage', 'Note'];
+    const headers = ['Name', 'Email', 'College', 'Domain', 'Project', 'Stage', 'Note', 'Resume'];
     const rows = list.map(s => [
-      s.name, s.email, s.college, s.domain, s.ptitle, s.stage, (s.note || '').replace(/,/g, ';')
+      s.name, s.email, s.college, s.domain, s.ptitle, s.stage, (s.note || '').replace(/,/g, ';'), s.resume_path ? 'Available' : 'Not Available'
     ]);
     const csvContent = "data:text/csv;charset=utf-8,"
       + [headers, ...rows].map(e => e.join(",")).join("\n");
@@ -126,6 +131,22 @@ export default function Dashboard() {
         <h2 style={{ fontSize: '1.8rem', fontWeight: 800 }}>HR Login Required</h2>
         <p style={{ color: 'var(--muted)', margin: '14px 0 24px' }}>Please log in to your HR account to view the dashboard.</p>
         <button className="btn-primary" onClick={() => document.querySelector('header button.btn-secondary:nth-child(1)').click()}>HR Login →</button>
+      </div>
+    </div>
+  );
+
+  if (!isApprovedHR) return (
+    <div className="page active" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 70px)', background: 'var(--bg)' }}>
+      <div style={{ textAlign: 'center', maxWidth: 450, padding: 40, background: '#fff', borderRadius: 24, boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)' }}>
+        <div style={{ fontSize: '4rem', marginBottom: 20 }}>⏳</div>
+        <h2 style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--ink)' }}>Account Pending Approval</h2>
+        <p style={{ color: 'var(--muted)', margin: '14px 0 24px', lineHeight: 1.6 }}>
+          Welcome, <strong>{hrUser?.name}</strong>! Your HR account has been created. 
+          An administrator needs to approve your account before you can access student details and post jobs.
+        </p>
+        <div style={{ padding: '12px', background: 'rgba(14,165,233,.1)', borderRadius: 12, fontSize: '.85rem', color: '#0369a1', fontWeight: 600 }}>
+          You will be able to see full student profiles once approved.
+        </div>
       </div>
     </div>
   );
@@ -238,6 +259,7 @@ export default function Dashboard() {
                             <div style={{ flex: 1 }}>
                               <h3 style={{ fontWeight: 800 }}>{s.name}</h3>
                               <div style={{ fontSize: '.75rem', color: 'var(--muted)' }}>{s.college} • {s.ptitle}</div>
+                              {s.resume_path && <div style={{ fontSize: '.7rem', color: 'var(--secondary)', marginTop: 4 }}>📄 Resume Available</div>}
                             </div>
                             <div style={{ display: 'flex', gap: 8 }}>
                               <select value={s.stage} onChange={e => changeStage(s.student_id, e.target.value)} style={{ padding: '4px 8px', borderRadius: 8, fontSize: '.75rem' }}>
@@ -411,14 +433,30 @@ export default function Dashboard() {
                     {selected.github && <a href={selected.github} target="_blank" rel="noreferrer" className="btn-secondary" style={{ textAlign: 'center' }}>GitHub Repo</a>}
                     {selected.demo && <a href={selected.demo} target="_blank" rel="noreferrer" className="btn-secondary" style={{ textAlign: 'center' }}>Live Demo</a>}
                     {selected.has_resume && (
-                      <a href={selected.resume_path ? `http://127.0.0.1:8000/uploads/${selected.resume_path}` : (selected.github ? (selected.github.startsWith('http') ? selected.github : 'https://' + selected.github) : '#')} target="_blank" rel="noreferrer" className="btn-primary" style={{ display: 'flex', justifyContent: 'center', gap: 8, alignItems: 'center', textDecoration: 'none', border: 'none' }}>
-                        <FiDownload /> {selected.resume_path ? 'Download CV' : 'Resume / Drive Files'}
+                      <a href={selected.resume_path ? `http://127.0.0.1:8000/uploads/${selected.resume_path}` : (selected.github ? (selected.github.startsWith('http') ? selected.github : 'https://' + selected.github) : '#')} download={selected.resume_path} className="btn-primary" style={{ display: 'flex', justifyContent: 'center', gap: 8, alignItems: 'center', textDecoration: 'none', border: 'none' }}>
+                        <FiDownload /> Download Resume (PDF)
                       </a>
+                    )}
+                    {selected.resume_path && (
+                      <div style={{ marginTop: 20, border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+                        <iframe src={`http://127.0.0.1:8000/uploads/${selected.resume_path}`} width="100%" height="500px" style={{ border: 'none' }} />
+                      </div>
                     )}
                     <div style={{ padding: '12px', background: 'var(--bg2)', borderRadius: 12, marginTop: 10, textAlign: 'center' }}>
                       <div style={{ fontSize: '.7rem', color: 'var(--muted)', marginBottom: 4 }}>Current Stage</div>
                       <div style={{ fontSize: '.9rem', fontWeight: 800, color: STAGES[selected.stage]?.bg }}>{STAGES[selected.stage]?.l}</div>
                     </div>
+
+                    {selected.resume_path && (
+                      <a
+                        href={`http://127.0.0.1:8000/uploads/${selected.resume_path}`}
+                        download={selected.resume_path}
+                        className="btn-primary"
+                        style={{ display: 'flex', justifyContent: 'center', gap: 8, alignItems: 'center', textDecoration: 'none', border: 'none', marginTop: 12, padding: '10px', borderRadius: 12, background: '#2563eb', color: '#fff', fontWeight: 700, fontSize: '.9rem' }}
+                      >
+                        <FiDownload /> Download Resume
+                      </a>
+                    )}
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
                       <button

@@ -1,10 +1,9 @@
 import axios from 'axios';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
 const api = axios.create({
   baseURL: API_BASE,
-  headers: { 'Content-Type': 'application/json' },
 });
 
 // Request Interceptor: Attach token if it exists
@@ -15,19 +14,29 @@ api.interceptors.request.use((config) => {
   const token = hToken || sToken;
 
   if (token) {
-    config.params = { ...config.params, token };
+    if (!config.params) config.params = {};
+    if (!config.params.token) {
+      config.params.token = token;
+    }
   }
   return config;
-}, (error) => {
-  return Promise.reject(error);
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const msg = error.response?.data?.detail || error.response?.data?.message || error.message;
+    console.error('API Error:', error.response?.status, msg);
+    return Promise.reject(error);
+  }
+);
 
 // ── Auth ──
 export const registerStudent = (data) => api.post('/auth/register', data);
 export const loginStudent = (data) => api.post('/auth/login', data);
 export const registerHR = (data) => api.post('/auth/hr/register', data);
 export const loginHR = (data) => api.post('/auth/hr/login', data);
-export const verifyToken = (token) => api.get(`/auth/me?token=${token}`);
+export const verifyToken = (token) => api.get('/auth/me', { params: { token } });
 
 // ── Students ──
 export const fetchStudents = () => api.get('/students/');
@@ -36,9 +45,15 @@ export const submitProject = (data) => api.post('/students/', data);
 export const deleteProject = (id) => api.delete(`/students/${id}`);
 export const fetchMyProjects = () => api.get('/students/my/projects');
 export const updateStudentProfile = (data) => api.post('/students/update-profile', data);
-export const uploadResume = (studentId, formData) => api.post(`/students/${studentId}/resume`, formData, {
-  headers: { 'Content-Type': 'multipart/form-data' }
-});
+export const fetchMyProfile = (token) => api.get('/students/me', { params: { token } });
+export const uploadResume = (file, token = sessionStorage.getItem('ta_token')) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('token', token);
+  return api.post('/students/me/resume', formData);
+};
+
+export const applyToJob = (data) => api.post('/jobs/apply', { ...data, token: data.token || sessionStorage.getItem('ta_token') });
 
 // ── HR ──
 export const fetchShortlist = () => api.get('/hr/shortlist');
@@ -65,12 +80,15 @@ export const adminReviewSubmission = (submissionId, data) => api.post(`/challeng
 
 // ── Jobs ──
 export const fetchJobs = (params = {}) => api.get('/jobs/', { params });
-export const applyToJob = (data) => api.post('/jobs/apply', data);
-export const fetchMyApplications = (token) => api.get('/jobs/my-applications', { params: { token } });
-export const toggleBookmark = (token, id) => api.post(`/jobs/bookmark?token=${token}&job_id=${id}`);
-export const fetchBookmarks = (token) => api.get('/jobs/bookmarks', { params: { token } });
+export const fetchMyApplications = () => api.get('/jobs/my-applications');
+export const toggleBookmark = (id) => api.post(`/jobs/bookmark?job_id=${id}`);
+export const fetchBookmarks = () => api.get('/jobs/bookmarks');
 export const createJob = (data) => api.post('/jobs/', data);
 export const deleteJob = (id) => api.delete(`/jobs/${id}`);
 export const fetchMyJobs = () => api.get('/jobs/hr/my');
+
+// ── Notifications ──
+export const fetchNotifications = () => api.get('/notifications/');
+export const markNotificationsAsRead = () => api.post('/notifications/read-all');
 
 export default api;

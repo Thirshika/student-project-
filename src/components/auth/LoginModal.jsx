@@ -37,7 +37,9 @@ export default function LoginModal({ mode = 'student', onClose }) {
         navigate('/upload');
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'An error occurred. Please try again.');
+      let msg = err.response?.data?.detail || err.response?.data?.message || err.message;
+      if (msg === 'Network Error') msg = 'Cannot connect to server. Is the backend running?';
+      setError(msg);
     } finally {
       setLoading(false);
     }

@@ -87,6 +87,25 @@ export default function Talent() {
     }
   };
 
+  if (isHR && !isApprovedHR) {
+    return (
+      <div className="page active" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 70px)', background: 'var(--bg)' }}>
+        <div style={{ textAlign: 'center', maxWidth: 480, padding: 40, background: '#fff', borderRadius: 24, boxShadow: 'var(--sh-lg)' }}>
+          <div style={{ fontSize: '4rem', marginBottom: 20 }}>🔒</div>
+          <h2 style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--ink)' }}>Approval Required</h2>
+          <p style={{ color: 'var(--muted)', margin: '14px 0 24px', lineHeight: 1.6 }}>
+            Your HR account is currently pending approval by the admin. 
+            The talent directory and student details are restricted to approved partners only.
+          </p>
+          <div style={{ padding: '12px', background: 'rgba(14,165,233,.05)', borderRadius: 12, fontSize: '.85rem', color: 'var(--secondary)', fontWeight: 600 }}>
+            You will gain full access once your account is verified.
+          </div>
+          <button className="btn-secondary" style={{ marginTop: 24 }} onClick={() => navigate('/')}>Return to Home</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="page active" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 'calc(100vh - 70px)' }}>
       
@@ -293,7 +312,13 @@ export default function Talent() {
                   <div style={{ textAlign: 'center', padding: '10px 0' }}>
                     <div style={{ fontSize: '2rem', marginBottom: 10 }}>🔒</div>
                     <p style={{ fontSize: '.85rem', color: 'var(--muted)', marginBottom: 16 }}>Contact details, resumes, and project links are hidden to protect student privacy.</p>
-                    <button className="btn-gradient" style={{ width: '100%' }} onClick={() => navigate('/login-hr')}>Login as HR to View</button>
+                    {isHR ? (
+                      <div style={{ padding: '12px', background: 'rgba(14,165,233,.1)', borderRadius: 12, fontSize: '.75rem', color: '#0369a1', fontWeight: 600 }}>
+                        Your account is pending admin approval. You will gain full access once verified.
+                      </div>
+                    ) : (
+                      <button className="btn-gradient" style={{ width: '100%' }} onClick={() => navigate('/login-hr')}>Login as HR to View</button>
+                    )}
                   </div>
                 )}
               </div>
